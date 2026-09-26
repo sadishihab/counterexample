@@ -48,6 +48,14 @@ def _focus_map(mutant_results: list[MutantResult]) -> list[tuple[str, int]]:
     return distinct
 
 
+def _error_item(result: MutantResult) -> str:
+    return f"""
+    <div class="error-item">
+      <code>{escape(result.mutant.file_path)}:{result.mutant.line}</code>
+      <pre>{escape(result.detail)}</pre>
+    </div>"""
+
+
 def render_receipt(
     pr_title: str,
     claim_verdicts: list[ClaimVerdict],
@@ -72,6 +80,16 @@ def render_receipt(
         <ul class="focus-map">{focus_items}</ul>"""
     else:
         focus_section = "<p>No surviving mutants — every mutation on changed lines was caught.</p>"
+
+    errors = [result for result in mutant_results if result.status == "error"]
+    if errors:
+        error_items = "".join(_error_item(result) for result in errors)
+        errors_section = f"""
+        <h2>Errors</h2>
+        <p>{len(errors)} mutant(s) could not be scored — investigate before trusting the score above:</p>
+        {error_items}"""
+    else:
+        errors_section = ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -112,6 +130,19 @@ def render_receipt(
   .focus-map {{ padding-left: 1.25rem; }}
   .focus-map li {{ margin-bottom: 0.25rem; }}
   code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
+  .error-item {{
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: #fff8e1;
+    border-left: 4px solid #f39c12;
+  }}
+  .error-item pre {{
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.85rem;
+  }}
 </style>
 </head>
 <body>
@@ -124,6 +155,7 @@ def render_receipt(
   <h2>Mutation testing</h2>
   <p class="score">{score * 100:.0f}%</p>
   {focus_section}
+  {errors_section}
 </body>
 </html>
 """
