@@ -54,8 +54,14 @@ def _run_single_mutant(repo_path: str, mutant: Mutant) -> MutantResult:
         (dest / mutant.file_path).write_text(mutant.mutated_source)
 
         try:
+            # Scoped to tests/ (AGENTS.md's documented convention: "every
+            # module has tests under tests/") rather than a bare `pytest -q`,
+            # which recursively collects any test_*.py anywhere in the repo —
+            # including unrelated files like review-evidence/, which broke
+            # every single mutant identically with an unrelated collection
+            # error instead of a real killed/survived verdict.
             proc = subprocess.run(
-                [sys.executable, "-m", "pytest", "-q"],
+                [sys.executable, "-m", "pytest", "-q", "tests"],
                 cwd=dest,
                 capture_output=True,
                 text=True,
