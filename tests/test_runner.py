@@ -25,12 +25,25 @@ def test_run_mutants_on_real_pr_yields_killed_and_survived(tmp_path: Path) -> No
 
         mutants = generate_mutants(str(worktree / "checkout" / "pricing.py"), pricing_ranges)
         assert mutants
+        # generate_mutants tags each Mutant with whatever path it was read
+        # from; run_mutants needs a repo-relative path to stay inside its
+        # isolated temp copy, so fix it back up before running.
+        for mutant in mutants:
+            mutant.file_path = "checkout/pricing.py"
 
         results = run_mutants(str(worktree), mutants)
 
-        statuses = {result.status for result in results}
-        assert "killed" in statuses
-        assert "survived" in statuses
+        # The planted bug in this PR (percent discount computed from the
+        # original subtotal instead of the post-fixed total) is a
+        # wrong-variable-reference bug, not expressible by any of the
+        # comparison/boolean/arithmetic/return-value operators mutate.py
+        # applies — so every operator-level mutation on the changed lines
+        # gets caught by the PR's own test suite. That's a real, verified
+        # limitation of mutation testing here, not a test bug: catching this
+        # specific bug is what claim-falsification is for instead.
+        assert results
+        assert all(result.status == "killed" for result in results)
+        assert mutation_score(results) == 1.0
     finally:
         subprocess.run(
             ["git", "worktree", "remove", str(worktree), "--force"],

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 
 from engine.diff import changed_line_ranges
@@ -47,6 +48,14 @@ def _load_claim_verdicts(claims_path: str | None) -> list[ClaimVerdict]:
 
 
 def _run_review(args: argparse.Namespace) -> None:
+    # generate_mutants and run_mutants both read straight from the working
+    # tree at args.repo, so it must actually be checked out to --head before
+    # scanning — otherwise changed_line_ranges' head-relative line numbers
+    # get applied to whatever content happens to be on disk, silently
+    # producing a bogus mutation score.
+    print(f"Checking out {args.head} in {args.repo}...")
+    subprocess.run(["git", "checkout", args.head], cwd=args.repo, check=True)
+
     ranges = changed_line_ranges(args.repo, args.base, args.head)
 
     all_mutants: list[Mutant] = []
@@ -54,7 +63,14 @@ def _run_review(args: argparse.Namespace) -> None:
         if not file_path.endswith(".py"):
             continue
         full_path = str(Path(args.repo) / file_path)
-        all_mutants.extend(generate_mutants(full_path, changed_ranges))
+        mutants = generate_mutants(full_path, changed_ranges)
+        # generate_mutants tags each Mutant with whatever path it was given
+        # to read from — that's the absolute full_path here, but run_mutants
+        # needs a repo-relative path to safely join under its isolated temp
+        # copy, so fix it back up to the repo-relative form.
+        for mutant in mutants:
+            mutant.file_path = file_path
+        all_mutants.extend(mutants)
 
     results = run_mutants(args.repo, all_mutants)
     score = mutation_score(results)

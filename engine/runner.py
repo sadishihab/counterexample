@@ -40,6 +40,13 @@ def _tail(text: str) -> str:
 
 
 def _run_single_mutant(repo_path: str, mutant: Mutant) -> MutantResult:
+    if Path(mutant.file_path).is_absolute():
+        # Path("/tmp/x") / "/abs/path" silently discards the left side and
+        # returns "/abs/path" — an absolute mutant.file_path would make the
+        # write below escape the isolated temp copy and land on the real
+        # repo file instead. mutant.file_path must always be repo-relative.
+        raise ValueError(f"Mutant.file_path must be repo-relative, got absolute path: {mutant.file_path}")
+
     tmp_dir = tempfile.mkdtemp(prefix="counterexample-mutant-")
     try:
         dest = Path(tmp_dir) / "repo"
